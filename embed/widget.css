@@ -78,9 +78,9 @@
 }
 
 .ttc-card-image {
-  flex: 0 0 320px;
-  width: 320px;
-  aspect-ratio: 16 / 9;
+  flex: 0 0 340px;
+  width: 340px;
+  aspect-ratio: 3 / 2;
   object-fit: cover;
   display: block;
 }
@@ -146,7 +146,7 @@
   .ttc-card-image {
     flex: 0 0 auto;
     width: 100%;
-    aspect-ratio: 16 / 9;
+    aspect-ratio: 3 / 2;
   }
 }
 
