@@ -29,9 +29,11 @@ const auth = 'Basic ' + Buffer.from(apiKey + ':').toString('base64');
 const PAGE_LIMIT = 100;
 const API_BASE = 'https://api.tickettailor.com';
 
-// Keep events that started up to an hour ago (so "currently happening"
-// evening events don't disappear from the list mid-event).
-const START_CUTOFF_GRACE_SECONDS = 60 * 60;
+// Include past events going back this far so the calendar view can show
+// historical activity. The list view filters these out client-side;
+// only the calendar renders them. Three years is enough to give a sense
+// of history without bloating events.json.
+const PAST_HORIZON_SECONDS = 60 * 60 * 24 * 365 * 3;
 // Ignore anything more than a year in the future — guards against stray
 // long-range drafts without capping any reasonable real schedule.
 const HORIZON_SECONDS = 60 * 60 * 24 * 365;
@@ -128,7 +130,7 @@ function isRelevant(ev, nowUnix) {
   if (NAME_BLOCKLIST.some((term) => name.includes(term))) return false;
   const startUnix = ev.start?.unix;
   if (!startUnix) return false;
-  if (startUnix < nowUnix - START_CUTOFF_GRACE_SECONDS) return false;
+  if (startUnix < nowUnix - PAST_HORIZON_SECONDS) return false;
   if (startUnix > nowUnix + HORIZON_SECONDS) return false;
   return true;
 }
@@ -139,17 +141,17 @@ console.log('Fetching events from Ticket Tailor…');
 const raw = await fetchAllEvents();
 console.log('Fetched ' + raw.length + ' total events.');
 
-const upcoming = raw
+const kept = raw
   .filter(ev => isRelevant(ev, nowUnix))
   .sort((a, b) => (a.start?.unix || 0) - (b.start?.unix || 0))
   .map(normalizeEvent);
 
-console.log('Kept ' + upcoming.length + ' upcoming published events.');
+console.log('Kept ' + kept.length + ' published events (past + upcoming).');
 
 const output = {
   generated_at: new Date().toISOString(),
-  count: upcoming.length,
-  events: upcoming,
+  count: kept.length,
+  events: kept,
 };
 
 await mkdir(dirname(OUTPUT_PATH), { recursive: true });

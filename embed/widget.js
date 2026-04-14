@@ -261,7 +261,7 @@
     const cta = el(
       'span',
       'ttc-card-cta' + (ev.sold_out ? ' ttc-card-cta-disabled' : ''),
-      ev.sold_out ? 'Sold out' : ev.call_to_action || 'Buy tickets',
+      ev.sold_out ? 'Sold out' : 'View event',
     );
     body.appendChild(cta);
 
@@ -275,7 +275,6 @@
 
   function renderCalendar(events) {
     const wrap = el('section', 'ttc-calendar');
-    wrap.appendChild(el('h2', 'ttc-calendar-heading', 'Calendar'));
 
     const eventsByDay = new Map();
     for (const ev of events) {
@@ -290,6 +289,9 @@
     let viewYear = now.getFullYear();
     let viewMonth = now.getMonth();
 
+    // If the current month has no events, jump to the first *upcoming*
+    // month that does (not just the first overall, which would land us
+    // in the distant past when past events are included).
     const currentKey = viewYear + '-' + viewMonth;
     const monthsWithEvents = new Set();
     for (const ev of events) {
@@ -299,9 +301,11 @@
       }
     }
     if (!monthsWithEvents.has(currentKey) && events.length) {
-      const first = parseStart(events[0]);
-      viewYear = first.getFullYear();
-      viewMonth = first.getMonth();
+      const nowUnix = Date.now() / 1000;
+      const upcoming = events.find((ev) => (ev.start_unix || 0) >= nowUnix);
+      const picked = parseStart(upcoming || events[0]);
+      viewYear = picked.getFullYear();
+      viewMonth = picked.getMonth();
     }
 
     const container = el('div', 'ttc-calendar-container');
@@ -462,10 +466,16 @@
     return eventsPromise;
   }
 
-  function filterByHorizon(events, days) {
-    if (!days) return events;
-    const cutoff = Date.now() / 1000 + days * 24 * 60 * 60;
-    return events.filter((ev) => (ev.start_unix || 0) <= cutoff);
+  // Upcoming-only filter with a small grace period so an event that
+  // started an hour ago (currently happening) still shows in the list.
+  function filterUpcoming(events, days) {
+    const now = Date.now() / 1000;
+    const lower = now - 60 * 60;
+    const upper = days ? now + days * 24 * 60 * 60 : Infinity;
+    return events.filter((ev) => {
+      const t = ev.start_unix || 0;
+      return t >= lower && t <= upper;
+    });
   }
 
   async function mount(root) {
@@ -492,18 +502,29 @@
       return;
     }
 
-    const visible = filterByHorizon(events, days);
-    if (!visible.length) {
+    // List view: upcoming only, optionally capped to N days.
+    // Calendar view: everything we fetched (past + upcoming).
+    const listEvents = filterUpcoming(events, days);
+    const calendarEvents = events;
+
+    const willRenderList = view === 'list' || view === 'both';
+    const willRenderCalendar = view === 'calendar' || view === 'both';
+
+    // Empty state only blocks rendering when nothing at all would appear.
+    if (
+      (!willRenderList || !listEvents.length) &&
+      (!willRenderCalendar || !calendarEvents.length)
+    ) {
       root.innerHTML = '<div class="ttc-empty">No upcoming events right now — check back soon.</div>';
       return;
     }
 
     root.innerHTML = '';
-    if (view === 'list' || view === 'both') {
-      root.appendChild(renderList(visible));
+    if (willRenderList && listEvents.length) {
+      root.appendChild(renderList(listEvents));
     }
-    if (view === 'calendar' || view === 'both') {
-      root.appendChild(renderCalendar(visible));
+    if (willRenderCalendar && calendarEvents.length) {
+      root.appendChild(renderCalendar(calendarEvents));
     }
   }
 
