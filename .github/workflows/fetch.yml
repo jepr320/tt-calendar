@@ -23,6 +23,12 @@ concurrency:
   group: tt-calendar-fetch
   cancel-in-progress: false
 
+# Opt into the Node 24 runtime for JS-based actions ahead of the June 2026
+# deprecation; silences the Node-20 warning without waiting for new action
+# releases.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   fetch-and-deploy:
     runs-on: ubuntu-latest
