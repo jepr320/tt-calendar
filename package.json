@@ -1,0 +1,14 @@
+{
+  "name": "tt-calendar",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Custom calendar built on the Ticket Tailor API, embeddable in Squarespace.",
+  "scripts": {
+    "probe": "node scripts/probe.mjs",
+    "fetch": "node scripts/fetch.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

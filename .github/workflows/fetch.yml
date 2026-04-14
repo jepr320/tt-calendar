@@ -1,0 +1,51 @@
+name: Fetch Ticket Tailor events
+
+on:
+  # Every 15 minutes.
+  schedule:
+    - cron: '*/15 * * * *'
+  # Allow running manually from the Actions tab.
+  workflow_dispatch: {}
+  # Redeploy when the widget or fetch script changes.
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/fetch.mjs'
+      - '.github/workflows/fetch.yml'
+      - 'embed/**'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: tt-calendar-fetch
+  cancel-in-progress: false
+
+jobs:
+  fetch-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Fetch events
+        env:
+          TT_API_KEY: ${{ secrets.TT_API_KEY }}
+        run: node scripts/fetch.mjs
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: embed
+
+      - id: deployment
+        name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
