@@ -1,17 +1,27 @@
 // Colorado Connection Collective — Ticket Tailor calendar widget.
 //
 // Fetches embed/events.json (produced by scripts/fetch.mjs on a cron) and
-// renders an upcoming-events list plus a month calendar grid into
-// <div id="tt-calendar-root"></div>.
+// renders into any element with the class `tt-calendar-widget`. Each
+// mount reads per-instance options from data attributes so you can drop
+// a list in one Squarespace code block and a calendar in another:
 //
-// Clicking any event opens the Ticket Tailor checkout in a full-screen
-// modal iframe (with ?modal_widget=true&widget=true appended), mirroring
-// what TT's own widget does internally. No external scripts required.
+//   <div class="tt-calendar-widget" data-view="list" data-days="45"></div>
+//   <div class="tt-calendar-widget" data-view="calendar"></div>
+//
+// Supported data attributes:
+//   data-view   — "list" | "calendar" | "both" (default: "both")
+//   data-days   — optional horizon in days; only show events starting
+//                 within N days from now. Applies to both views.
+//
+// Clicking any event opens the TT event page in a full-screen modal
+// iframe (with ?modal_widget=true&widget=true appended). TT then hands
+// checkout off to a new tab because their checkout pages set
+// X-Frame-Options: SAMEORIGIN — unavoidable without a custom domain.
 
 (function () {
   const selfScript = document.currentScript;
 
-  const ROOT_ID = 'tt-calendar-root';
+  const MOUNT_SELECTOR = '.tt-calendar-widget';
 
   // Case-insensitive substring blocklist applied to event title +
   // plain-text description. Server-side fetch.mjs already filters events by
@@ -436,20 +446,44 @@
 
   // ---------- Boot ----------
 
-  async function main() {
-    const root = document.getElementById(ROOT_ID);
-    if (!root) {
-      console.error('[tt-calendar] Missing <div id="' + ROOT_ID + '"></div>');
-      return;
+  // Cache the fetch promise so multiple mounts on the same page share a
+  // single request. If the user pastes both a list block and a calendar
+  // block into Squarespace, they'll read from the same in-flight promise.
+  let eventsPromise = null;
+  function loadEvents() {
+    if (!eventsPromise) {
+      eventsPromise = fetch(EVENTS_URL, { cache: 'no-cache' })
+        .then((res) => {
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          return res.json();
+        })
+        .then((data) => (data.events || []).filter(shouldShow));
     }
+    return eventsPromise;
+  }
+
+  function filterByHorizon(events, days) {
+    if (!days) return events;
+    const cutoff = Date.now() / 1000 + days * 24 * 60 * 60;
+    return events.filter((ev) => (ev.start_unix || 0) <= cutoff);
+  }
+
+  async function mount(root) {
+    // Guard against double-mounting — if the user includes <script> in two
+    // Squarespace code blocks, the IIFE runs twice.
+    if (root.dataset.ttcMounted) return;
+    root.dataset.ttcMounted = '1';
+
+    const view = (root.dataset.view || 'both').toLowerCase();
+    const daysRaw = parseInt(root.dataset.days, 10);
+    const days = Number.isFinite(daysRaw) && daysRaw > 0 ? daysRaw : null;
+
     root.classList.add('ttc-root');
     root.innerHTML = '<div class="ttc-loading">Loading events…</div>';
 
-    let data;
+    let events;
     try {
-      const res = await fetch(EVENTS_URL, { cache: 'no-cache' });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      data = await res.json();
+      events = await loadEvents();
     } catch (err) {
       console.error('[tt-calendar] failed to load', EVENTS_URL, err);
       root.innerHTML =
@@ -458,15 +492,30 @@
       return;
     }
 
-    const events = (data.events || []).filter(shouldShow);
-    if (!events.length) {
+    const visible = filterByHorizon(events, days);
+    if (!visible.length) {
       root.innerHTML = '<div class="ttc-empty">No upcoming events right now — check back soon.</div>';
       return;
     }
 
     root.innerHTML = '';
-    root.appendChild(renderList(events));
-    root.appendChild(renderCalendar(events));
+    if (view === 'list' || view === 'both') {
+      root.appendChild(renderList(visible));
+    }
+    if (view === 'calendar' || view === 'both') {
+      root.appendChild(renderCalendar(visible));
+    }
+  }
+
+  function main() {
+    const mounts = document.querySelectorAll(MOUNT_SELECTOR);
+    if (!mounts.length) {
+      console.error(
+        '[tt-calendar] No mount found. Add <div class="tt-calendar-widget"></div> to the page.',
+      );
+      return;
+    }
+    mounts.forEach(mount);
   }
 
   if (document.readyState === 'loading') {
