@@ -274,7 +274,11 @@
 
     card.appendChild(body);
 
-    if (!ev.sold_out) bindEventClick(card, ev);
+    // Bind the click for every event — including sold-out ones (e.g.
+    // members-only events that read as "sold out" because they have no public
+    // tickets). Affiliate events still fall through to a new tab via
+    // openEventModal returning false.
+    bindEventClick(card, ev);
     return card;
   }
 
@@ -434,7 +438,7 @@
       link.appendChild(el('span', 'ttc-day-single-label', ev.name || 'Event'));
     }
 
-    if (!ev.sold_out) bindEventClick(link, ev);
+    bindEventClick(link, ev);  // sold-out events open the modal too
     return link;
   }
 
@@ -456,7 +460,7 @@
     }
     link.appendChild(el('span', 'ttc-day-event-title', ev.name || 'Event'));
 
-    if (!ev.sold_out) bindEventClick(link, ev);
+    bindEventClick(link, ev);  // sold-out events open the modal too
     return link;
   }
 
