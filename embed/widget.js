@@ -262,9 +262,12 @@
     const desc = truncate(stripHtml(ev.description_html || ''), DESCRIPTION_SNIPPET_CHARS);
     if (desc) body.appendChild(el('p', 'ttc-card-desc', desc));
 
-    const ctaLabel = ev.source === 'affiliate'
-      ? (ev.call_to_action || 'Learn more')
-      : (ev.sold_out ? 'Sold out' : 'View event');
+    let ctaLabel;
+    if (ev.source === 'affiliate') ctaLabel = ev.call_to_action || 'Learn more';
+    else if (ev.members_only) ctaLabel = 'Members only';
+    else if (ev.sold_out) ctaLabel = 'Sold out';
+    else ctaLabel = 'View event';
+    // Members-only events stay clickable (only truly sold-out ones are dimmed).
     const cta = el(
       'span',
       'ttc-card-cta' + (ev.sold_out ? ' ttc-card-cta-disabled' : ''),

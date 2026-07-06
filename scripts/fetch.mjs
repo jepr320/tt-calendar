@@ -115,9 +115,15 @@ async function fetchPortalEvents() {
 function normalizeEvent(ev) {
   const ticketTypes = Array.isArray(ev.ticket_types) ? ev.ticket_types : [];
   const onSale = ticketTypes.filter(t => t && t.status === 'on_sale');
+  const membersOnly = ticketTypes.filter(t => t && t.status === 'members_only');
   const minPriceCents = onSale.length
     ? Math.min(...onSale.map(t => Number(t.price) || 0))
     : null;
+
+  // An event whose only bookable tickets are members-only isn't sold out —
+  // Ticket Tailor still lets members reserve. Tell the two apart so the widget
+  // can label a members-only event as such instead of "Sold out".
+  const membersOnlyEvent = onSale.length === 0 && membersOnly.length > 0;
 
   return {
     id: ev.id,
@@ -136,7 +142,8 @@ function normalizeEvent(ev) {
     call_to_action: ev.call_to_action || 'Buy tickets',
     price_min_cents: minPriceCents,
     currency: (ev.currency || 'usd').toLowerCase(),
-    sold_out: ticketTypes.length > 0 && onSale.length === 0,
+    members_only: membersOnlyEvent,
+    sold_out: ticketTypes.length > 0 && onSale.length === 0 && membersOnly.length === 0,
     source: 'ticket_tailor',
   };
 }
