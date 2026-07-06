@@ -295,6 +295,27 @@
   object-fit: cover;
   display: block;
 }
+/* Imageless single-event cell: fill with an accent block + the event name so
+   the square isn't blank. The day-num keeps its own dark backing, so it stays
+   legible over the fill. */
+.ttc-day-single-noimg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.4rem 0.5rem 0.5rem;
+  background: var(--ttc-accent, #222);
+}
+.ttc-day-single-label {
+  color: var(--ttc-accent-text, #fff);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
 .ttc-day-single .ttc-day-num {
   position: absolute;
   top: 0.35rem;

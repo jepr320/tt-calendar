@@ -148,6 +148,10 @@
   let activeModal = null;
 
   function openEventModal(ev) {
+    // Affiliate (non–Ticket-Tailor) events link to an external site, not a TT
+    // page — returning false makes the click fall through to a normal new-tab
+    // navigation instead of trying to iframe a page that forbids framing.
+    if (ev.source === 'affiliate') return false;
     const startUrl = ev.event_url || ev.checkout_url;
     if (!startUrl) return false;
 
@@ -258,10 +262,13 @@
     const desc = truncate(stripHtml(ev.description_html || ''), DESCRIPTION_SNIPPET_CHARS);
     if (desc) body.appendChild(el('p', 'ttc-card-desc', desc));
 
+    const ctaLabel = ev.source === 'affiliate'
+      ? (ev.call_to_action || 'Learn more')
+      : (ev.sold_out ? 'Sold out' : 'View event');
     const cta = el(
       'span',
       'ttc-card-cta' + (ev.sold_out ? ' ttc-card-cta-disabled' : ''),
-      ev.sold_out ? 'Sold out' : 'View event',
+      ctaLabel,
     );
     body.appendChild(cta);
 
@@ -420,6 +427,11 @@
       img.alt = ev.name || '';
       img.loading = 'lazy';
       link.appendChild(img);
+    } else {
+      // Imageless events (e.g. affiliate events with no uploaded image) fill
+      // the cell with a text label instead of an empty square.
+      link.classList.add('ttc-day-single-noimg');
+      link.appendChild(el('span', 'ttc-day-single-label', ev.name || 'Event'));
     }
 
     if (!ev.sold_out) bindEventClick(link, ev);

@@ -38,12 +38,13 @@ const PAST_HORIZON_SECONDS = 60 * 60 * 24 * 365 * 3;
 // long-range drafts without capping any reasonable real schedule.
 const HORIZON_SECONDS = 60 * 60 * 24 * 365;
 
-// Case-insensitive substring blocklist applied to the event name. Events
-// matching any of these are filtered out before events.json is written, so
-// they never reach the public widget at all. Use for categories that can't
-// be caught by TT's hidden/private flags (e.g. members-only gatherings that
-// are technically public in TT but shouldn't surface on the public calendar).
-const NAME_BLOCKLIST = ['member connection lab'];
+// The portal (admin app) exposes affiliate — i.e. non–Ticket-Tailor — events as
+// a pre-normalized JSON feed. We fetch it server-side here and merge it into
+// events.json so the public calendar shows those too. Non-fatal: if it fails,
+// the Ticket Tailor events still publish. Override with PORTAL_EVENTS_URL
+// (e.g. ...?scope=all to later source everything from the portal).
+const PORTAL_EVENTS_URL = process.env.PORTAL_EVENTS_URL
+  || 'https://admin.coloradoconnectioncollective.com/events/calendar/public.json?scope=affiliate';
 
 async function fetchPage(startingAfter) {
   const url = new URL('/v1/events', API_BASE);
@@ -94,6 +95,23 @@ function truthy(v) {
   return v === true || v === 'true';
 }
 
+async function fetchPortalEvents() {
+  try {
+    const res = await fetch(PORTAL_EVENTS_URL, { headers: { Accept: 'application/json' } });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const events = Array.isArray(data.events) ? data.events : [];
+    console.log('Fetched ' + events.length + ' portal (affiliate) events.');
+    return events;
+  } catch (err) {
+    console.warn(
+      'Portal events fetch failed (' + err.message + '); ' +
+      'publishing Ticket Tailor events only.'
+    );
+    return [];
+  }
+}
+
 function normalizeEvent(ev) {
   const ticketTypes = Array.isArray(ev.ticket_types) ? ev.ticket_types : [];
   const onSale = ticketTypes.filter(t => t && t.status === 'on_sale');
@@ -119,6 +137,7 @@ function normalizeEvent(ev) {
     price_min_cents: minPriceCents,
     currency: (ev.currency || 'usd').toLowerCase(),
     sold_out: ticketTypes.length > 0 && onSale.length === 0,
+    source: 'ticket_tailor',
   };
 }
 
@@ -126,8 +145,8 @@ function isRelevant(ev, nowUnix) {
   if (ev.status !== 'published') return false;
   if (truthy(ev.hidden)) return false;
   if (truthy(ev.private)) return false;
-  const name = (ev.name || '').toLowerCase();
-  if (NAME_BLOCKLIST.some((term) => name.includes(term))) return false;
+  // Members-only events are intentionally shown on the public calendar now —
+  // anyone can see them; Ticket Tailor still gates who can actually sign up.
   const startUnix = ev.start?.unix;
   if (!startUnix) return false;
   if (startUnix < nowUnix - PAST_HORIZON_SECONDS) return false;
@@ -143,15 +162,22 @@ console.log('Fetched ' + raw.length + ' total events.');
 
 const kept = raw
   .filter(ev => isRelevant(ev, nowUnix))
-  .sort((a, b) => (a.start?.unix || 0) - (b.start?.unix || 0))
   .map(normalizeEvent);
 
-console.log('Kept ' + kept.length + ' published events (past + upcoming).');
+console.log('Kept ' + kept.length + ' published Ticket Tailor events (past + upcoming).');
+
+// Merge in the portal's affiliate events, then sort the combined list by
+// start time (both sources expose start_unix).
+const portalEvents = await fetchPortalEvents();
+const merged = [...kept, ...portalEvents]
+  .sort((a, b) => (a.start_unix || 0) - (b.start_unix || 0));
+
+console.log('Total after merge: ' + merged.length + ' events.');
 
 const output = {
   generated_at: new Date().toISOString(),
-  count: kept.length,
-  events: kept,
+  count: merged.length,
+  events: merged,
 };
 
 await mkdir(dirname(OUTPUT_PATH), { recursive: true });
