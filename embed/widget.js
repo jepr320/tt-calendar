@@ -79,6 +79,31 @@
     return new Date(NaN);
   }
 
+  function parseEnd(ev) {
+    if (ev.end_iso) return new Date(ev.end_iso);
+    if (ev.end_unix) return new Date(ev.end_unix * 1000);
+    return new Date(NaN);
+  }
+
+  // Every local calendar day an event covers, start day through end day
+  // inclusive (a Fri-evening-to-Sun-afternoon retreat lights up Fri/Sat/Sun).
+  // Missing, invalid, or earlier-than-start ends fall back to the start day.
+  function eventDayKeys(ev) {
+    const start = parseStart(ev);
+    if (isNaN(start.getTime())) return [];
+    const keys = [localDateKey(start)];
+    const end = parseEnd(ev);
+    if (isNaN(end.getTime()) || end <= start) return keys;
+    const endKey = localDateKey(end);
+    const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    // Step by local calendar day (not 24h) so DST changes can't skip a day.
+    for (let i = 0; i < 366 && keys[keys.length - 1] !== endKey; i++) {
+      cursor.setDate(cursor.getDate() + 1);
+      keys.push(localDateKey(cursor));
+    }
+    return keys;
+  }
+
   function formatEventDate(ev) {
     const d = parseStart(ev);
     if (isNaN(d.getTime())) return '';
@@ -292,11 +317,10 @@
 
     const eventsByDay = new Map();
     for (const ev of events) {
-      const d = parseStart(ev);
-      if (isNaN(d.getTime())) continue;
-      const key = localDateKey(d);
-      if (!eventsByDay.has(key)) eventsByDay.set(key, []);
-      eventsByDay.get(key).push(ev);
+      for (const key of eventDayKeys(ev)) {
+        if (!eventsByDay.has(key)) eventsByDay.set(key, []);
+        eventsByDay.get(key).push(ev);
+      }
     }
 
     const now = new Date();
