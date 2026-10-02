@@ -107,11 +107,13 @@
   function formatEventDate(ev) {
     const d = parseStart(ev);
     if (isNaN(d.getTime())) return '';
-    const datePart = d.toLocaleDateString(undefined, {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    });
+    const dateOpts = { weekday: 'short', month: 'short', day: 'numeric' };
+    let datePart = d.toLocaleDateString(undefined, dateOpts);
+    // A multi-day event reads "Sat, Nov 21 – Sun, Nov 22" so the list agrees
+    // with the calendar grid, which lights up every day it runs.
+    if (eventDayKeys(ev).length > 1) {
+      datePart += ' – ' + parseEnd(ev).toLocaleDateString(undefined, dateOpts);
+    }
     const timePart = d.toLocaleTimeString(undefined, {
       hour: 'numeric',
       minute: '2-digit',
