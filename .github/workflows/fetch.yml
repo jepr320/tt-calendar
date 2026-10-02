@@ -18,6 +18,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  actions: write  # keepalive step below
 
 concurrency:
   group: tt-calendar-fetch
@@ -41,6 +42,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      # GitHub silently disables a cron schedule after 60 days without a
+      # commit to the repo (it bit us 2026-09-04 → 2026-10-02: the website
+      # calendar froze for a month). Re-enabling the workflow through the API
+      # counts as activity and resets that clock, with no dummy commits.
+      - name: Keep the schedule alive
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/fetch.yml/enable"
 
       - name: Fetch events
         env:
