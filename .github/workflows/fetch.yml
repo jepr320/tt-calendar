@@ -31,11 +31,8 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
-  fetch-and-deploy:
+  fetch:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -63,6 +60,17 @@ jobs:
         with:
           path: embed
 
+  # Deploy runs as its own job, the layout of GitHub's Pages starter
+  # workflows. As a step right after the upload, deploy-pages looked the
+  # artifact up within a second and often got "Found 0 artifact(s)" (GitHub
+  # lists it a few seconds later); that failed most deploys from 2026-11-23.
+  deploy:
+    needs: fetch
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         name: Deploy to GitHub Pages
         uses: actions/deploy-pages@v5
